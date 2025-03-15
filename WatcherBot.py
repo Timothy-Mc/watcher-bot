@@ -171,7 +171,7 @@ async def monthly_reset_task():
             top_user = await bot.fetch_user(int(top_loser_id))
             embed = discord.Embed(
                 title="**BIGGEST LOSER OF THE MONTH!**",
-                description=f"🏆 **{top_user.name}** took **{loser_count} Ls!**",
+                description=f"**{top_user.name}** took **{loser_count} Ls!**",
                 color=discord.Color.red(),
                 timestamp=datetime.now(SYDNEY_TZ)
             )
