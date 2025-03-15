@@ -1,7 +1,8 @@
+import json
 import discord
 import asyncio
 import random
-from discord.ext import commands
+from discord.ext import commands, tasks
 from datetime import datetime, time, timedelta
 import pytz
 
@@ -21,6 +22,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 last_person_to_leave = {vc_id: None for vc_id in VOICE_CHANNEL_IDS}
 tracking_active = {vc_id: False for vc_id in VOICE_CHANNEL_IDS}
 
+LEADERBOARD_FILE = "loser_leaderboard.json"
 
 ROAST_MESSAGES = [
     "Biggest quitter of the night. Congrats.",
@@ -29,7 +31,101 @@ ROAST_MESSAGES = [
     "No stamina. No willpower. Just disappointment.",
     "Legend has it, they're still recovering from that L.",
     "Guess you couldn’t handle the grind. Shame.",
+    "You're like a cloud, when you disappear, it's a beautiful day.",
+    "You're proof that even evolution takes a break sometimes.",
+    "I'd agree with you, but then we’d both be wrong.",
+    "Your jokes are like your WiFi—weak and barely connecting.",
+    "You're the reason we need warning labels on shampoo bottles.",
+    "If I had a dollar for every smart thing you said, I'd be broke.",
+    "You're like a penny: two-faced, worthless, and nobody wants you.",
+    "Your personality is like a black hole—sucks the life out of everything around it.",
+    "You're about as useful as a screen door on a submarine.",
+    "The only thing faster than your internet is how quickly people regret talking to you.",
+    "Your comebacks are slower than a Windows XP startup.",
+    "You're like a software update—nobody wants you, but we’re forced to deal with you.",
+    "You bring everyone so much joy… when you leave the VC.",
+    "Your presence is like a 404 error—unwanted and useless.",
+    "Your voice is like a mosquito at 2 AM—annoying and impossible to ignore.",
+    "You're the human equivalent of a lag spike.",
+    "Your life is like your KD ratio—just pure disappointment.",
+    "Your brain must be a rented server—barely running and always lagging.",
+    "You're the reason Discord has a block feature.",
+    "If ignorance was a currency, you’d be a billionaire."
 ]
+
+def load_leaderboard():
+    try:
+        with open(LEADERBOARD_FILE, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+def save_leaderboard(leaderboard):
+    with open(LEADERBOARD_FILE, "w") as f:
+        json.dump(leaderboard, f, indent=4)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    bot.loop.create_task(enable_tracking())
+    weekly_leaderboard_task.start()
+    monthly_reset_task.start()
+
+@bot.command()
+async def leaderboard(ctx):
+    leaderboard = load_leaderboard()
+    
+    if not leaderboard:
+        await ctx.send("**No losers recorded yet!**")
+        return
+
+    sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
+    leaderboard_text = "\n".join([f"**<@{user_id}>**: {count} Ls" for user_id, count in sorted_leaderboard[:10]])
+
+    embed = discord.Embed(
+        title="**Biggest Losers Leaderboard**",
+        description=leaderboard_text or "No losers yet!",
+        color=discord.Color.gold(),
+        timestamp=datetime.now(SYDNEY_TZ)
+    )
+    embed.set_footer(text="Who will take the next L?")
+
+    await ctx.send(embed=embed)
+
+@tasks.loop(hours=168)
+async def weekly_leaderboard_task():
+    leaderboard = load_leaderboard()
+    if not leaderboard:
+        return
+
+    sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
+    leaderboard_text = "\n".join([f"<@{user_id}>: **{count}** times" for user_id, count in sorted_leaderboard[:10]])
+
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+    if log_channel:
+        embed = discord.Embed(
+            title="**Weekly Biggest Loser Leaderboard!**",
+            description=leaderboard_text or "No losers this week!",
+            color=discord.Color.gold(),
+            timestamp=datetime.now(SYDNEY_TZ)
+        )
+        embed.set_footer(text="Who will take the L next?")
+
+        await log_channel.send(embed=embed)
+
+@tasks.loop(hours=720)
+async def monthly_reset_task():
+    leaderboard = load_leaderboard()
+    if not leaderboard:
+        return
+
+    top_loser = max(leaderboard, key=leaderboard.get, default=None)
+    log_channel = bot.get_channel(LOG_CHANNEL_ID)
+
+    if log_channel and top_loser:
+        await log_channel.send(f"**BIGGEST LOSER OF THE MONTH:** <@{top_loser}> took **{leaderboard[top_loser]} Ls!**")
+
+    save_leaderboard({})
 
 @bot.event
 async def on_voice_state_update(member, before, after):
@@ -41,33 +137,27 @@ async def on_voice_state_update(member, before, after):
             print(f"ERROR: Voice channel {vc_id} not found!")
             continue
 
-        # Get only real users (ignore bots)
         real_users_in_vc = [m for m in voice_channel.members if not m.bot]
         num_real_users = len(real_users_in_vc)
 
         print(f"Current Real Users in {voice_channel.name} (Ignoring Bots): {num_real_users}")
 
-        # Start tracking only if 2 or more real users are in VC
         if num_real_users >= 2:
             tracking_active[vc_id] = True
             print(f"Tracking started for {voice_channel.name}!")
 
-        # If tracking is active and someone leaves
         if tracking_active[vc_id] and before.channel and before.channel.id == vc_id and not after.channel:
             print(f"{member.display_name} left {voice_channel.name}")
 
-            # If VC is now empty (excluding bots), announce and reset
             if num_real_users == 0:
                 last_person_to_leave[vc_id] = member
 
-                # Ignore bots when selecting the "Biggest Loser"
                 if last_person_to_leave[vc_id].bot:
                     print(f"{last_person_to_leave[vc_id].display_name} is a bot. Not announcing.")
                     return
 
-                print(f"🔥 {member.display_name} was the last to leave {voice_channel.name}!")
+                print(f"{member.display_name} was the last to leave {voice_channel.name}!")
 
-                # Announce in log channel with a fun roast embed
                 log_channel = bot.get_channel(LOG_CHANNEL_ID)
                 if log_channel:
                     roast_message = random.choice(ROAST_MESSAGES)
@@ -79,37 +169,36 @@ async def on_voice_state_update(member, before, after):
                         timestamp=datetime.now(SYDNEY_TZ)
                     )
                     embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
-                    embed.add_field(name="**Final VC Survivor**", value=f"**{member.display_name}** (but not for long)", inline=False)
+                    embed.add_field(name="**Final Looser**", value=f"**{member.display_name}** (but not for long)", inline=False)
                     embed.add_field(name="**Time of Defeat**", value=f"{datetime.now(SYDNEY_TZ).strftime('%I:%M %p AEDT')}", inline=False)
-                    embed.set_footer(text="Try again tomorrow... if you dare.")
+                    embed.set_footer(text="The peasant of the day.")
 
+                    await asyncio.sleep(60)
+                    
                     await log_channel.send(embed=embed)
 
-                # Reset tracking for this VC
                 last_person_to_leave[vc_id] = None
-                tracking_active[vc_id] = False  # Stop tracking until 2 real users rejoin
+                tracking_active[vc_id] = False
 
 async def enable_tracking():
-    """ Enables tracking every night at 10 PM AEDT and stops at 4 AM """
     global tracking_active  
     while True:
-        now = datetime.now(SYDNEY_TZ)  # Get current Sydney time
+        now = datetime.now(SYDNEY_TZ)
         print(f"Current Sydney Time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
 
-        # Set the tracking window (10 PM - 4 AM)
-        start_time = datetime.combine(now.date(), time(22, 0), SYDNEY_TZ)  # 10 PM AEDT
-        end_time = datetime.combine(now.date() + timedelta(days=1), time(4, 0), SYDNEY_TZ)  # 4 AM AEDT
+        start_time = datetime.combine(now.date(), time(22, 0), SYDNEY_TZ)
+        end_time = datetime.combine(now.date() + timedelta(days=1), time(22, 0), SYDNEY_TZ)
 
         print(f"Tracking window: {start_time.strftime('%I:%M %p AEDT')} - {end_time.strftime('%I:%M %p AEDT')}")
 
         if start_time <= now < end_time:
             print("It's already past 10 PM but before 4 AM, waiting for users in multiple VCs.")
             for vc_id in VOICE_CHANNEL_IDS:
-                tracking_active[vc_id] = False  # Wait for two real users per VC
+                tracking_active[vc_id] = False
         elif now >= end_time:
             print("It's past 4 AM, resetting for the next night...")
             for vc_id in VOICE_CHANNEL_IDS:
-                tracking_active[vc_id] = False  # Reset tracking
+                tracking_active[vc_id] = False
 
         else:
             wait_time = (start_time - now).total_seconds()
@@ -120,7 +209,6 @@ async def enable_tracking():
         print(f"Tracking active... Will stop in {wait_time} seconds (at 4 AM AEDT)")
         await asyncio.sleep(wait_time)
 
-        # Stop tracking at 4 AM
         for vc_id in VOICE_CHANNEL_IDS:
             tracking_active[vc_id] = False
         print("Tracking ended at 4 AM AEDT. Resetting for the next night.")
