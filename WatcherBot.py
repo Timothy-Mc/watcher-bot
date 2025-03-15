@@ -73,14 +73,15 @@ async def on_ready():
 
 @bot.command()
 async def leaderboard(ctx):
-    leaderboard = load_leaderboard()
-    
+    leaderboard_data = load_leaderboard()
+    leaderboard = leaderboard_data.get("leaderboard", {})
+
     if not leaderboard:
         await ctx.send("**No losers recorded yet!**")
         return
 
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
-    leaderboard_text = "\n".join([f"**<@{user_id}>**: {count} Ls" for user_id, count in sorted_leaderboard[:10]])
+    leaderboard_text = "\n".join([f"**<@{user_id}>** - **{count} Ls**" for user_id, count in sorted_leaderboard[:10]])
 
     embed = discord.Embed(
         title="**Biggest Losers Leaderboard**",
@@ -88,44 +89,94 @@ async def leaderboard(ctx):
         color=discord.Color.gold(),
         timestamp=datetime.now(SYDNEY_TZ)
     )
+
+    if sorted_leaderboard:
+        top_user_id = sorted_leaderboard[0][0]
+        try:
+            top_user = await bot.fetch_user(int(top_user_id))
+            embed.set_thumbnail(url=top_user.avatar.url if top_user.avatar else top_user.default_avatar.url)
+        except discord.NotFound:
+            pass
+
     embed.set_footer(text="Who will take the next L?")
 
     await ctx.send(embed=embed)
 
 @tasks.loop(hours=168)
 async def weekly_leaderboard_task():
-    leaderboard = load_leaderboard()
+    leaderboard_data = load_leaderboard()
+    leaderboard = leaderboard_data.get("leaderboard", {})
+
     if not leaderboard:
         return
 
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
-    leaderboard_text = "\n".join([f"<@{user_id}>: **{count}** times" for user_id, count in sorted_leaderboard[:10]])
 
+    leaderboard_text = ""
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
-    if log_channel:
-        embed = discord.Embed(
-            title="**Weekly Biggest Loser Leaderboard!**",
-            description=leaderboard_text or "No losers this week!",
-            color=discord.Color.gold(),
-            timestamp=datetime.now(SYDNEY_TZ)
-        )
-        embed.set_footer(text="Who will take the L next?")
 
-        await log_channel.send(embed=embed)
+    if not log_channel:
+        print("ERROR: Log channel not found!")
+        return
+
+    for i, (user_id, count) in enumerate(sorted_leaderboard[:10], start=1):
+        try:
+            user = await bot.fetch_user(int(user_id))
+            leaderboard_text += f"**#{i}** **{user.name}** - **{count} Ls**\n"
+        except discord.NotFound:
+            leaderboard_text += f"**#{i}** **Unknown User ({user_id})** - **{count} Ls**\n"
+
+    embed = discord.Embed(
+        title="**Weekly Biggest Loser Leaderboard!**",
+        description=leaderboard_text or "No losers this week!",
+        color=discord.Color.gold(),
+        timestamp=datetime.now(SYDNEY_TZ)
+    )
+
+    if sorted_leaderboard:
+        top_user_id = sorted_leaderboard[0][0]
+        try:
+            top_user = await bot.fetch_user(int(top_user_id))
+            embed.set_thumbnail(url=top_user.avatar.url if top_user.avatar else top_user.default_avatar.url)
+        except discord.NotFound:
+            pass
+
+    embed.set_footer(text="Who will take the L next?")
+
+    await log_channel.send(embed=embed)
+
 
 @tasks.loop(hours=720)
 async def monthly_reset_task():
-    leaderboard = load_leaderboard()
+    leaderboard_data = load_leaderboard()
+    leaderboard = leaderboard_data.get("leaderboard", {})
+
     if not leaderboard:
         return
 
-    top_loser = max(leaderboard, key=leaderboard.get, default=None)
+    top_loser_id = max(leaderboard, key=leaderboard.get, default=None)
+    loser_count = leaderboard[top_loser_id] if top_loser_id else 0
+
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
 
-    if log_channel and top_loser:
-        await log_channel.send(f"**BIGGEST LOSER OF THE MONTH:** <@{top_loser}> took **{leaderboard[top_loser]} Ls!**")
+    if log_channel and top_loser_id:
+        try:
+            top_user = await bot.fetch_user(int(top_loser_id))
+            embed = discord.Embed(
+                title="**BIGGEST LOSER OF THE MONTH!**",
+                description=f"🏆 **{top_user.name}** took **{loser_count} Ls!**",
+                color=discord.Color.red(),
+                timestamp=datetime.now(SYDNEY_TZ)
+            )
+            embed.set_thumbnail(url=top_user.avatar.url if top_user.avatar else top_user.default_avatar.url)
+            embed.set_footer(text="Try again next month... if you dare.")
 
-    save_leaderboard({})
+            await log_channel.send(embed=embed)
+        except discord.NotFound:
+            await log_channel.send(f"**BIGGEST LOSER OF THE MONTH:** <@{top_loser_id}> took **{loser_count} Ls!**")
+
+    leaderboard_data["leaderboard"] = {}
+    save_leaderboard(leaderboard_data)
 
 @bot.event
 async def on_voice_state_update(member, before, after):
