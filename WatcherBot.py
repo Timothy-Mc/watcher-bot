@@ -77,7 +77,14 @@ async def leaderboard(ctx):
     leaderboard = leaderboard_data.get("leaderboard", {})
 
     if not leaderboard:
-        await ctx.send("**No losers recorded yet!**")
+        embed = discord.Embed(
+            title="**Biggest Losers Leaderboard**",
+            description="No losers recorded yet!",
+            color=discord.Color.gold(),
+            timestamp=datetime.now(SYDNEY_TZ)
+        )
+        embed.set_footer(text="Who will take the first L?")
+        await ctx.send(embed=embed)
         return
 
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
@@ -85,7 +92,7 @@ async def leaderboard(ctx):
 
     embed = discord.Embed(
         title="**Biggest Losers Leaderboard**",
-        description=leaderboard_text or "No losers yet!",
+        description=leaderboard_text,
         color=discord.Color.gold(),
         timestamp=datetime.now(SYDNEY_TZ)
     )
@@ -96,7 +103,7 @@ async def leaderboard(ctx):
             top_user = await bot.fetch_user(int(top_user_id))
             embed.set_thumbnail(url=top_user.avatar.url if top_user.avatar else top_user.default_avatar.url)
         except discord.NotFound:
-            pass
+            pass 
 
     embed.set_footer(text="Who will take the next L?")
 
