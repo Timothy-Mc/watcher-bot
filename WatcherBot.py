@@ -56,11 +56,15 @@ ROAST_MESSAGES = [
 def load_leaderboard():
     try:
         with open(LEADERBOARD_FILE, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+            print("Leaderboard Loaded:", data)  # Debugging
+            return data
     except FileNotFoundError:
-        return {}
+        print("Leaderboard file not found, creating a new one.")
+        return {"leaderboard": {}}
 
 def save_leaderboard(leaderboard):
+    print("Saving leaderboard:", leaderboard)  # Debugging
     with open(LEADERBOARD_FILE, "w") as f:
         json.dump(leaderboard, f, indent=4)
 
