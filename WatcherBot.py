@@ -64,13 +64,6 @@ def save_leaderboard(leaderboard):
     with open(LEADERBOARD_FILE, "w") as f:
         json.dump(leaderboard, f, indent=4)
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    bot.loop.create_task(enable_tracking())
-    weekly_leaderboard_task.start()
-    monthly_reset_task.start()
-
 @bot.command(name="loserboard")
 async def loserboard(ctx):
     print("!loserboard command triggered")
@@ -82,7 +75,7 @@ async def loserboard(ctx):
 
     if not leaderboard:
         embed = discord.Embed(
-            title="🏆 **Biggest Losers Leaderboard** 🏆",
+            title="**Biggest Losers Leaderboard**",
             description="No losers recorded yet!",
             color=discord.Color.gold(),
             timestamp=datetime.now(SYDNEY_TZ)
@@ -94,7 +87,7 @@ async def loserboard(ctx):
     sorted_leaderboard = sorted(leaderboard.items(), key=lambda x: x[1], reverse=True)
 
     embed = discord.Embed(
-        title="🏆 **Biggest Losers Leaderboard** 🏆",
+        title="**Biggest Losers Leaderboard**",
         color=discord.Color.gold(),
         timestamp=datetime.now(SYDNEY_TZ)
     )
@@ -322,6 +315,13 @@ async def enable_tracking():
         for vc_id in VOICE_CHANNEL_IDS:
             tracking_active[vc_id] = False
         print("Tracking ended at 4 AM AEDT. Resetting for the next night.")
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    bot.loop.create_task(enable_tracking())
+    weekly_leaderboard_task.start()
+    monthly_reset_task.start()
 
 with open('tokenWatcher.txt', 'r') as file:
     token = file.read().strip()
