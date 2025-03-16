@@ -198,11 +198,8 @@ async def on_voice_state_update(member, before, after):
         real_users_in_vc = [m for m in voice_channel.members if not m.bot]
         num_real_users = len(real_users_in_vc)
 
-        print(f"Current Real Users in {voice_channel.name} (Ignoring Bots): {num_real_users}")
-
         if num_real_users >= 2:
             tracking_active[vc_id] = True
-            print(f"Tracking started for {voice_channel.name}!")
 
         if tracking_active[vc_id] and before.channel and before.channel.id == vc_id and not after.channel:
             print(f"{member.display_name} left {voice_channel.name}")
@@ -211,10 +208,19 @@ async def on_voice_state_update(member, before, after):
                 last_person_to_leave[vc_id] = member
 
                 if last_person_to_leave[vc_id].bot:
-                    print(f"{last_person_to_leave[vc_id].display_name} is a bot. Not announcing.")
                     return
 
-                print(f"{member.display_name} was the last to leave {voice_channel.name}!")
+                # LOAD JSON FILE
+                leaderboard_data = load_leaderboard()
+                leaderboard = leaderboard_data.get("leaderboard", {})
+
+                # UPDATE LEADERBOARD COUNTS
+                user_id = str(member.id)
+                leaderboard[user_id] = leaderboard.get(user_id, 0) + 1
+                leaderboard_data["leaderboard"] = leaderboard
+
+                # SAVE TO JSON
+                save_leaderboard(leaderboard_data)
 
                 log_channel = bot.get_channel(LOG_CHANNEL_ID)
                 if log_channel:
@@ -227,12 +233,9 @@ async def on_voice_state_update(member, before, after):
                         timestamp=datetime.now(SYDNEY_TZ)
                     )
                     embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
-                    embed.add_field(name="**Final Looser**", value=f"**{member.display_name}** (but not for long)", inline=False)
-                    embed.add_field(name="**Time of Defeat**", value=f"{datetime.now(SYDNEY_TZ).strftime('%I:%M %p AEDT')}", inline=False)
                     embed.set_footer(text="The peasant of the day.")
 
                     await asyncio.sleep(60)
-                    
                     await log_channel.send(embed=embed)
 
                 last_person_to_leave[vc_id] = None
