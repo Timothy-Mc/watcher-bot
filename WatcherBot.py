@@ -17,6 +17,7 @@ LOG_CHANNEL_ID = 975760066659639417
 intents = discord.Intents.default()
 intents.voice_states = True
 intents.guilds = True
+intents.members = True
 intents.messages = True
 intents.message_content = True
 
@@ -60,11 +61,13 @@ async def on_ready():
 @bot.event
 async def on_voice_state_update(member, before, after):
     now = datetime.now(SYDNEY_TZ)
+    user_id = str(member.id)
+
     vc_stats = load_json(vc_stats_FILE)
     points = load_json(points_FILE)
     loserboard_data = load_json(loserboard_FILE)
     hallofshame_data = load_json(hallofshame_FILE)
-    user_id = str(member.id)
+    roast_messages = load_json(roasts_FILE)
 
     for vc_id in VOICE_CHANNEL_IDS:
         if before.channel and before.channel.id == vc_id:
@@ -74,26 +77,30 @@ async def on_voice_state_update(member, before, after):
             if tracking_active[vc_id] and not after.channel and len(vc_current_users[vc_id]) == 0:
                 last_person_to_leave[vc_id] = member
 
-                if last_person_to_leave[vc_id].bot:
+                if member.bot:
                     return
 
                 loserboard = loserboard_data.get("loserboard", {})
                 hallofshame = hallofshame_data.get("hallofshame", {})
+
                 loserboard[user_id] = loserboard.get(user_id, 0) + 1
                 hallofshame[user_id] = hallofshame.get(user_id, 0) + 1
+
                 loserboard_data["loserboard"] = loserboard
                 hallofshame_data["hallofshame"] = hallofshame
+
                 save_json(loserboard_FILE, loserboard_data)
                 save_json(hallofshame_FILE, hallofshame_data)
 
                 log_channel = bot.get_channel(LOG_CHANNEL_ID)
                 if log_channel:
-                    roast_message = random.choice(load_roasts())
+                    roast_message = random.choice(roast_messages["roast_messages"])
+
                     embed = discord.Embed(
                         title="**Tonight's BIGGEST LOSER!**",
                         description=f"{member.mention} just took the **BIGGEST L** in **{before.channel.name}**! {roast_message}",
                         color=discord.Color.red(),
-                        timestamp=datetime.now(SYDNEY_TZ)
+                        timestamp=now
                     )
                     embed.set_thumbnail(url=member.avatar.url if member.avatar else member.default_avatar.url)
                     embed.set_footer(text="The peasant of the day.")
@@ -108,12 +115,9 @@ async def on_voice_state_update(member, before, after):
             if not member.bot:
                 vc_current_users[vc_id].add(member.id)
 
-            if len(vc_current_users[vc_id]) > 2:
+            if len(vc_current_users[vc_id]) >= 2:
                 tracking_active[vc_id] = True
 
-    if after.channel and after.channel.id in VOICE_CHANNEL_IDS:
-        user_join_times[user_id] = now
-
     if before.channel and before.channel.id in VOICE_CHANNEL_IDS and not after.channel:
         if user_id in user_join_times:
             time_spent = (now - user_join_times[user_id]).total_seconds() / 60
@@ -123,17 +127,9 @@ async def on_voice_state_update(member, before, after):
             save_json(points_FILE, points)
             del user_join_times[user_id]
 
+    # Track join time into VC
     if after.channel and after.channel.id in VOICE_CHANNEL_IDS:
         user_join_times[user_id] = now
-    
-    if before.channel and before.channel.id in VOICE_CHANNEL_IDS and not after.channel:
-        if user_id in user_join_times:
-            time_spent = (now - user_join_times[user_id]).total_seconds() / 60
-            vc_stats[user_id] = round(vc_stats.get(user_id, 0) + time_spent, 2)
-            points[user_id] = round(points.get(user_id, 0) + time_spent, 2)
-            save_json(vc_stats_FILE, vc_stats)
-            save_json(points_FILE, points)
-            del user_join_times[user_id]
 
 @bot.command(aliases=['vc', 'vclb'])
 async def vcleaderboard(ctx):
@@ -666,39 +662,6 @@ async def summon(ctx, target: discord.Member):
 #     embed.add_field(name="No", value=str(len(bet['bets']['no'])) + " user(s)", inline=True)
 #     await ctx.send(embed=embed)
 
-async def enable_tracking():
-    global tracking_active  
-    while True:
-        now = datetime.now(SYDNEY_TZ)
-        print(f"Current Sydney Time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
-
-        start_time = datetime.combine(now.date(), time(22, 0), SYDNEY_TZ)
-        end_time = datetime.combine(now.date() + timedelta(days=1), time(10, 0), SYDNEY_TZ)
-
-        print(f"Tracking window: {start_time.strftime('%I:%M %p AEDT')} - {end_time.strftime('%I:%M %p AEDT')}")
-
-        if start_time <= now < end_time:
-            print("It's already past 10 PM but before 4 AM, waiting for users in multiple VCs.")
-            for vc_id in VOICE_CHANNEL_IDS:
-                tracking_active[vc_id] = False
-        elif now >= end_time:
-            print("It's past 4 AM, resetting for the next night...")
-            for vc_id in VOICE_CHANNEL_IDS:
-                tracking_active[vc_id] = False
-
-        else:
-            wait_time = (start_time - now).total_seconds()
-            print(f"Waiting {wait_time} seconds until 10 PM AEDT to start tracking...")
-            await asyncio.sleep(wait_time)
-
-        wait_time = (end_time - datetime.now(SYDNEY_TZ)).total_seconds()
-        print(f"Tracking active... Will stop in {wait_time} seconds (at 4 AM AEDT)")
-        await asyncio.sleep(wait_time)
-
-        for vc_id in VOICE_CHANNEL_IDS:
-            tracking_active[vc_id] = False
-        print("Tracking ended at 4 AM AEDT. Resetting for the next night.")
-
 @tasks.loop(hours=24)
 async def backup_json_files():
     now = datetime.now(SYDNEY_TZ)
@@ -724,6 +687,39 @@ async def backup_json_files():
                 backup.write(original.read())
 
     print(f"[BACKUP] JSON files backed up at {timestamp}")
+
+async def enable_tracking():
+    global tracking_active  
+    while True:
+        now = datetime.now(SYDNEY_TZ)
+        print(f"Current Sydney Time: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        start_time = datetime.combine(now.date(), time(22, 0), SYDNEY_TZ)
+        end_time = datetime.combine(now.date() + timedelta(days=1), time(10, 0), SYDNEY_TZ)
+
+        print(f"Tracking window: {start_time.strftime('%I:%M %p AEDT')} - {end_time.strftime('%I:%M %p AEDT')}")
+
+        if start_time <= now < end_time:
+            print("It's already past 10 PM but before 10 AM, waiting for users in multiple VCs.")
+            for vc_id in VOICE_CHANNEL_IDS:
+                tracking_active[vc_id] = False
+        elif now >= end_time:
+            print("It's past 10 AM, resetting for the next night...")
+            for vc_id in VOICE_CHANNEL_IDS:
+                tracking_active[vc_id] = False
+
+        else:
+            wait_time = (start_time - now).total_seconds()
+            print(f"Waiting {wait_time} seconds until 10 PM AEDT to start tracking...")
+            await asyncio.sleep(wait_time)
+
+        wait_time = (end_time - datetime.now(SYDNEY_TZ)).total_seconds()
+        print(f"Tracking active... Will stop in {wait_time} seconds (at 10 AM AEDT)")
+        await asyncio.sleep(wait_time)
+
+        for vc_id in VOICE_CHANNEL_IDS:
+            tracking_active[vc_id] = False
+        print("Tracking ended at 10 AM AEDT. Resetting for the next night.")
 
 with open('tokenWatcher.txt', 'r') as file:
     token = file.read().strip()
