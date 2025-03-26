@@ -1,56 +1,37 @@
 import os
 import shutil
 from discord.ext import commands, tasks
-from datetime import datetime
-from utils.constants import (
-    vc_stats_FILE, points_FILE, loserboard_FILE, hallofshame_FILE,
-    bets_FILE, roasts_FILE, summons_FILE
-)
 from utils.time_utils import now_sydney
 
 class BackupCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.backup_json_files.start()
+        self.backup_sqlite_db.start()
 
     @tasks.loop(hours=24)
-    async def backup_json_files(self):
+    async def backup_sqlite_db(self):
         now = now_sydney()
         timestamp = now.strftime("%Y-%m-%d_%H-%M")
 
         backup_dir = "backups"
         os.makedirs(backup_dir, exist_ok=True)
 
-        files_to_backup = [
-            vc_stats_FILE,
-            points_FILE,
-            loserboard_FILE,
-            hallofshame_FILE,
-            bets_FILE,
-            roasts_FILE,
-            summons_FILE,
-        ]
+        db_file = "data/watcherbot.db"
+        if not os.path.exists(db_file):
+            print("[BACKUP] Database file not found, skipping.")
+            return
 
-        for file_path in files_to_backup:
-            if not os.path.exists(file_path):
-                continue
+        backup_name = f"{timestamp}_{db_file}"
+        backup_path = os.path.join(backup_dir, backup_name)
 
-            filename = os.path.basename(file_path)
-            backup_name = f"{timestamp}_{filename}"
-            backup_path = os.path.join(backup_dir, backup_name)
+        shutil.copy(db_file, backup_path)
+        self.prune_old_backups(backup_dir, db_file, keep=1)
 
-            # Copy current file to backup
-            shutil.copy(file_path, backup_path)
+        print(f"[BACKUP] SQLite DB backed up at {timestamp}")
 
-            # Clean older backups of the same file
-            self.prune_old_backups(backup_dir, filename, keep=2)
-
-        print(f"[BACKUP] JSON files backed up at {timestamp}")
-
-    def prune_old_backups(self, backup_dir, filename, keep=2):
-        """Deletes old backups of the same filename, keeping only the most recent `keep`."""
+    def prune_old_backups(self, backup_dir, filename, keep=1):
         matching = [f for f in os.listdir(backup_dir) if f.endswith(filename)]
-        matching.sort()  # Oldest first due to timestamp
+        matching.sort()  # Oldest first
 
         if len(matching) > keep:
             to_delete = matching[:-keep]
@@ -61,10 +42,10 @@ class BackupCog(commands.Cog):
                 except Exception as e:
                     print(f"[ERROR] Could not delete {file}: {e}")
 
-    @backup_json_files.before_loop
+    @backup_sqlite_db.before_loop
     async def before_backup_loop(self):
         await self.bot.wait_until_ready()
 
 async def setup(bot):
-    print("[SETUP] Registering Leaderboards cog")
+    print("[SETUP] Registering Backup cog")
     await bot.add_cog(BackupCog(bot))

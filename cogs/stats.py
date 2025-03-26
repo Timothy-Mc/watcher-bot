@@ -1,7 +1,13 @@
 import discord
 from discord.ext import commands
+from utils.constants import bets_FILE
 from utils.json_manager import load_json
-from utils.constants import vc_stats_FILE, points_FILE, loserboard_FILE, hallofshame_FILE, bets_FILE
+from utils.sqlite_manager import (
+    get_points,
+    get_user,
+    get_monthly_losers,
+    get_lifetime_losers
+)
 from utils.time_utils import now_sydney
 
 class StatsCog(commands.Cog):
@@ -13,16 +19,14 @@ class StatsCog(commands.Cog):
         member = member or ctx.author
         user_id = str(member.id)
 
-        vc_stats = load_json(vc_stats_FILE)
-        points = load_json(points_FILE)
-        loserboard = load_json(loserboard_FILE).get("loserboard", {})
-        hallofshame = load_json(hallofshame_FILE).get("hallofshame", {})
-        bets = load_json(bets_FILE)
+        points, vc_minutes = await get_user(member.id)
 
-        vc_minutes = vc_stats.get(user_id, 0)
-        user_points = points.get(user_id, 0)
-        monthly_ls = loserboard.get(user_id, 0)
-        lifetime_ls = hallofshame.get(user_id, 0)
+        losers = dict(await get_monthly_losers(100))
+        shame = dict(await get_lifetime_losers(100))
+        monthly_ls = losers.get(user_id, 0)
+        lifetime_ls = shame.get(user_id, 0)
+
+        bets = load_json(bets_FILE)
         bet_data = bets.get(user_id)
 
         embed = discord.Embed(
@@ -34,7 +38,7 @@ class StatsCog(commands.Cog):
         embed.set_thumbnail(url=member.display_avatar.url)
 
         embed.add_field(name="🎤 VC Minutes", value=f"**{round(vc_minutes, 2)}**", inline=True)
-        embed.add_field(name="💰 Points", value=f"**{int(user_points)}**", inline=True)
+        embed.add_field(name="💰 Points", value=f"**{int(points)}**", inline=True)
         embed.add_field(name="📉 Monthly Ls", value=f"**{monthly_ls}**", inline=True)
         embed.add_field(name="💀 Lifetime Ls", value=f"**{lifetime_ls}**", inline=True)
 
