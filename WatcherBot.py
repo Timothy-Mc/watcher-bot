@@ -3,6 +3,10 @@ from discord.ext import commands
 import os
 import asyncio
 import traceback
+from utils.sqlite_manager import (
+    init_db, init_loser_tables, init_meta_table,
+    maybe_reset_monthly_losers
+)
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="~", intents=intents, help_command=None)
@@ -22,6 +26,11 @@ async def load_cogs():
                 traceback.print_exc()
 
 async def main():
+    await init_db()
+    await init_loser_tables()
+    await init_meta_table()
+    # await maybe_reset_monthly_losers()
+
     async with bot:
         await load_cogs()
         with open("tokenWatcher.txt", "r") as f:
