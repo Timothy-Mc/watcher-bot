@@ -105,7 +105,7 @@ class Betting(commands.Cog):
             return
 
         if balance < amount:
-            await ctx.send("💸 You don’t have enough points.")
+            await ctx.send("💸 You don’t have enough aura.")
             return
 
         if any(user_id in bet["bets"][opt] for opt in bet["options"]):
@@ -197,7 +197,7 @@ class Betting(commands.Cog):
             title="✅ Bet Resolved!",
             description=(
                 f"**Result:** {winning_option.upper()}\n"
-                f"**Pot:** {total_pot} points\n"
+                f"**Pot:** {total_pot} aura\n"
                 f"**Winners:** {len(winners)} user(s)\n"
                 f"**Losers:** {len(losers)} user(s)"
             ),

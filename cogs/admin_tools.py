@@ -57,6 +57,21 @@ class AdminTools(commands.Cog):
 
         await ctx.send(embed=embed)
 
+    @commands.command(name="adjustaura")
+    @commands.has_permissions(administrator=True)
+    async def adjust_aura(self, ctx, member: discord.Member, points: int = 0):
+        async with aiosqlite.connect(DB_PATH) as db:
+            if points != 0:
+                await db.execute("""
+                    INSERT INTO user_points (user_id, points)
+                    VALUES (?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET points = points + ?;
+                """, (str(member.id), points, points))
+
+            await db.commit()
+
+        await ctx.send(f"✅ Adjusted {member.display_name}'s aura by `{points}`")
+
 async def setup(bot):
     print("[SETUP] Registering Admin Tools cog")
     await bot.add_cog(AdminTools(bot))

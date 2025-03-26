@@ -19,7 +19,7 @@ class HelpCog(commands.Cog):
             timestamp=now_sydney()
         )
         embed1.add_field(name="`~vcleaderboard` / `~vc` / `~vclb`", value="Top 10 users by VC time this month.", inline=False)
-        embed1.add_field(name="`~pointsleaderboard` / `~points` / `~pl`", value="Top 10 users by total points.", inline=False)
+        embed1.add_field(name="`~auraleaderbaord` / `~aura` / `~al`", value="Top 10 users by total aura.", inline=False)
         embed1.add_field(name="`~loserboard` / `~lb`", value="Top 10 monthly VC leavers (biggest Ls).", inline=False)
         embed1.add_field(name="`~hallofshame` / `~hs`", value="Lifetime biggest losers (all-time Ls).", inline=False)
         embed1.add_field(name="`~stats [@user]` / `~mystats` / `~profile`", value="See your or another user's stats.", inline=False)
@@ -32,8 +32,8 @@ class HelpCog(commands.Cog):
             color=discord.Color.orange(),
             timestamp=now_sydney()
         )
-        embed2.add_field(name="`~coinflip heads/tails amount` / `~cf`", value="50/50 chance to double your bet.", inline=False)
-        embed2.add_field(name="`~roll @user amount` / `~r`", value="Duel another user. Higher roll wins the pot.", inline=False)
+        embed2.add_field(name="`~coinflip heads/tails amount` / `~cf`", value="50/50 chance to double your bet.\nIf you win, you can react to go **double or nothing**!", inline=False)
+        embed2.add_field(name="`~roll @user amount` / `~r`", value="Duel another user. Higher roll wins the pot.\nWinner gains **1.5x aura**, loser loses full bet.", inline=False)
         embed2.add_field(name="`~slots amount`", value="Slot machine for fun (and losses).", inline=False)
         pages.append(embed2)
 

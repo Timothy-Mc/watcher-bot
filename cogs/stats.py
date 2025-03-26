@@ -38,7 +38,7 @@ class StatsCog(commands.Cog):
         embed.set_thumbnail(url=member.display_avatar.url)
 
         embed.add_field(name="🎤 VC Minutes", value=f"**{round(vc_minutes, 2)}**", inline=True)
-        embed.add_field(name="💰 Points", value=f"**{int(points)}**", inline=True)
+        embed.add_field(name="🌟 Aura", value=f"**{int(points)}**", inline=True)
         embed.add_field(name="📉 Monthly Ls", value=f"**{monthly_ls}**", inline=True)
         embed.add_field(name="💀 Lifetime Ls", value=f"**{lifetime_ls}**", inline=True)
 
